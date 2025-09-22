@@ -104,7 +104,7 @@ def install_equora():
                 exit_because("Installation aborted")
         # install equora
         os.mkdir(os.path.expanduser("~/eqSh"))
-        os.mkdir(os.path.expanduser("~/.config/quickshell/"), exist_ok=True)
+        os.mkdir(os.path.expanduser("~/.config/quickshell/"))
         # git clone
         os.system("git clone https://github.com/eq-desktop/eqSh ~/eqSh")
         # mv ~/eqSh/eqsh ~/.config/quickshell/
@@ -125,6 +125,9 @@ def is_equora_running() -> bool:
 
     # get json of .config/quickshell/eqsh/Runtime/runtime
     contents = {}
+    # if file doesnt exist
+    if not os.path.exists(os.path.expanduser("~/.config/quickshell/eqsh/Runtime/runtime")):
+        return False
     with open(os.path.expanduser("~/.config/quickshell/eqsh/Runtime/runtime"), "r") as f:
         contents = json.load(f)
 
@@ -135,10 +138,16 @@ def is_equora_running() -> bool:
 def kill_equora():
     # get json of .config/quickshell/eqsh/Runtime/runtime
     contents = {}
+    # if file doesnt exist
+    if not os.path.exists(os.path.expanduser("~/.config/quickshell/eqsh/Runtime/runtime")):
+        exit_because("Equora is not running")
     with open(os.path.expanduser("~/.config/quickshell/eqsh/Runtime/runtime"), "r") as f:
         contents = json.load(f)
 
     proc_id = contents["processId"]
+
+    if not is_equora_running():
+        exit_because("Equora is not running")
 
     os.kill(int(proc_id), 9)
 
