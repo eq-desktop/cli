@@ -110,6 +110,9 @@ def install_equora():
         # mv ~/eqSh/eqsh ~/.config/quickshell/
         shutil.move(os.path.expanduser("~/eqSh/eqsh"), os.path.expanduser("~/.config/quickshell/"))
         ok("Equora installed")
+        print("Post-installation steps:")
+        print("- Install Quickshell https://quickshell.org")
+        print("- Run `eqsh run` to start Equora")
     except Exception as e:
         err(f"Failed to install Equora: {e}")
 
