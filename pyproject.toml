@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "equora-cli"
+version = "0.1.0"
+description = "CLI for the Equora Linux Desktop"
+authors = [
+  { name="Jonas Schmidt", email="schmidtjonas662@gmail.com" }
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dependencies = []
+
+[project.scripts]
+equora = "equora.__main__:main"
