@@ -79,6 +79,40 @@ def ipc(*cmd: str):
     cmd = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
     eqsh_run("ipc " + "call " + " ".join(cmd))
 
+def ok(msg: str):
+    print("\033[92m\033[38;5;46mOK: \033[0m" + msg)
+
+def warn(msg: str):
+    print("\033[93m\033[38;5;208mWARNING: \033[0m" + msg)
+
+def err(msg: str):
+    print("\033[91m\033[38;5;196mERROR: \033[0m" + msg)
+
+def install_equora():
+    ok("Installing Equora...")
+    try:
+        # check if ~/eqSh or ~/.config/quickshell/eqsh exists
+        exists = [os.path.exists(os.path.expanduser("~/eqSh")), os.path.exists(os.path.expanduser("~/.config/quickshell/eqsh"))]
+        if exists[0] or exists[1]:
+            warn("Equora is already installed")
+            if input("Do you want to overwrite it? (y/n) ").lower() == "y":
+                if exists[0]:
+                    shutil.rmtree(os.path.expanduser("~/eqSh"))
+                if exists[1]:
+                    shutil.rmtree(os.path.expanduser("~/.config/quickshell/eqsh"))
+            else:
+                exit_because("Installation aborted")
+        # install equora
+        os.mkdir(os.path.expanduser("~/eqSh"))
+        os.mkdir(os.path.expanduser("~/.config/quickshell/"), exist_ok=True)
+        # git clone
+        os.system("git clone https://github.com/eq-desktop/eqSh ~/eqSh")
+        # mv ~/eqSh/eqsh ~/.config/quickshell/
+        shutil.move(os.path.expanduser("~/eqSh/eqsh"), os.path.expanduser("~/.config/quickshell/"))
+        ok("Equora installed")
+    except Exception as e:
+        err(f"Failed to install Equora: {e}")
+
 def process_name_from_pid(pid: int) -> str | None:
     try:
         with open(f"/proc/{pid}/comm", "r") as f:
@@ -130,6 +164,7 @@ def main():
 
     sub.add_parser("lock", help="Lock the screen")
     sub.add_parser("update", help="Look for updates")
+    sub.add_parser("install", help="Install Equora")
     sub.add_parser("settings", help="Open settings")
     sub.add_parser("launchpad", help="Open launchpad")
     notch = sub.add_parser("new_notch_app", help="Create a new notch app")
@@ -169,6 +204,8 @@ def main():
         eqsh_run("")
     elif args.command == "lock":
         ipc("eqlock", "lock")
+    elif args.command == "install":
+        install_equora()
     elif args.command == "settings":
         ipc("settings", "toggle")
     elif args.command == "update":
