@@ -26,7 +26,7 @@ With Equora CLI, you can:
 Make sure you have **Python 3** installed. Install it using pip:
 
 ```bash
-pip install git+https://github.com/eq-desktop/equora-cli.git
+pip install git+https://github.com/eq-desktop/cli.git
 ````
 
 ---
