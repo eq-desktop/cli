@@ -184,8 +184,8 @@ def main():
     parser = argparse.ArgumentParser(prog="equora", description="Equora Command Line Interface")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    run = sub.add_parser("run", help="Run Equora")
-    run.add_argument("--dev", action="store_true", help="Run Equora in development mode")
+    run_cmd = sub.add_parser("run", help="Run Equora")
+    run_cmd.add_argument("--dev", action="store_true", help="Run Equora in development mode")
 
     sub.add_parser("lock", help="Lock the screen")
     sub.add_parser("update", help="Look for updates")
