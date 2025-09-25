@@ -69,7 +69,7 @@ def reset_config():
 
 
 def eqsh(cmd: str):
-    return ("qs -c eqsh" + " " + cmd)
+    return ("qs -p ~/.local/share/equora/eqsh" + " " + cmd)
 
 def eqsh_run(cmd: str):
     run_detached(eqsh(cmd))
@@ -108,11 +108,12 @@ def install_equora():
         # git clone
         os.system("git clone https://github.com/eq-desktop/eqSh ~/eqSh")
         # mv ~/eqSh/eqsh ~/.config/quickshell/
-        shutil.move(os.path.expanduser("~/eqSh/eqsh"), os.path.expanduser("~/.config/quickshell/"))
-        ok("Equora installed")
+        os.mkdir(os.path.expanduser("~/.local/share/equora"))
         if input("Do you want to also wallpapers? (y/n) ").lower() == "y":
             os.system("git clone https://github.com/eq-desktop/wallpapers ~/eqSh/wallpapers")
             print("Wallpapers installed")
+        shutil.move(os.path.expanduser("~/eqSh"), os.path.expanduser("~/.local/share/equora"))
+        ok("Equora installed")
         print("Post-installation steps:")
         print("- Install Quickshell https://quickshell.org")
         print("- Run `eqsh run` to start Equora")
