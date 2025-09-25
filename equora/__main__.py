@@ -255,7 +255,7 @@ def main():
         file_contents = ""
         with open(args.file, "r") as f:
             file_contents = f.read()
-        safe_contents = shlex.quote(file_contents)
+        safe_contents = file_contents.replace("\\", "\\\\").replace('"', '\\"')
         ipc("notch", "instance", safe_contents, str(args.timeout), str(args.start_delay))
     elif args.command == "destroy_notch_app":
         ipc("notch", "instanceHide")
