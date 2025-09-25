@@ -82,6 +82,11 @@ def ipc(*cmd: str):
     cmd = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
     eqsh_run("ipc " + "call " + " ".join(cmd))
 
+def ipc_raw(*cmd: str):
+    if not is_equora_running(): exit_because("Equora is not running")
+    cmd = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
+    eqsh_run("ipc " + " ".join(cmd))
+
 def ok(msg: str):
     print("\033[92m\033[38;5;46mOK: \033[0m" + msg)
 
@@ -213,6 +218,12 @@ def main():
     get_cmd = sub.add_parser("get", help="Get a setting")
     get_cmd.add_argument("setting", help="The setting to get (e.g. bar.height)")
 
+    ipc_cmd = sub.add_parser("ipc", help="Call an IPC method")
+    ipc_cmd.add_argument("method", help="The method to call")
+    ipc_cmd.add_argument("args", nargs=argparse.REMAINDER, help="The arguments to pass to the method")
+
+    sub.add_parser("funcs", help="Show all available IPC methods")
+
     reset_cmd = sub.add_parser("reset", help="Reset (delete) a setting")
     reset_cmd.add_argument("setting", help="The setting to reset")
     reset_cmd.add_argument("--all", action="store_true", help="Reset all settings")
@@ -235,6 +246,10 @@ def main():
         run("pip install --upgrade git+https://github.com/eq-desktop/cli.git")
     elif args.command == "launchpad":
         ipc("launchpad", "toggle")
+    elif args.command == "ipc":
+        ipc(args.method, *args.args)
+    elif args.command == "funcs":
+        ipc_raw("show")
     elif args.command == "new_notch_app":
         # code: string, timeout: int, start_delay: int
         file_contents = ""
