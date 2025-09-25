@@ -106,7 +106,6 @@ def install_equora():
         # git clone
         os.system("git clone https://github.com/eq-desktop/eqSh ~/eqSh")
         # mv ~/eqSh to ~/.local/share/equora
-        os.mkdir(os.path.expanduser("~/.local/share/equora"))
         if input("Do you want to also install wallpapers? (y/n) ").lower() == "y":
             os.system("git clone https://github.com/eq-desktop/wallpapers ~/eqSh/wallpapers")
             print("Wallpapers installed")
@@ -223,7 +222,7 @@ def main():
     if args.command == "run":
         if is_equora_running(): exit_because("Equora is already running", 0)
         if args.dev:
-            eqsh_run_dev()
+            eqsh_run_dev("")
         else:
             eqsh_run("")
     elif args.command == "lock":
