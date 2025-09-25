@@ -232,7 +232,7 @@ def main():
     elif args.command == "settings":
         ipc("settings", "toggle")
     elif args.command == "update":
-        exit_because("Not implemented yet")
+        run("pip install --upgrade git+https://github.com/eq-desktop/cli.git")
     elif args.command == "launchpad":
         ipc("launchpad", "toggle")
     elif args.command == "new_notch_app":
