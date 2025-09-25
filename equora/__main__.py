@@ -7,7 +7,7 @@ import shlex
 import json
 import shutil
 
-CONFIG_PATH = os.path.expanduser("~/.config/quickshell/eqsh/Runtime/config.json")
+CONFIG_PATH = os.path.expanduser("~/.local/share/equora/eqsh/Runtime/config.json")
 
 def load_config():
     with open(CONFIG_PATH, "r") as f:
@@ -74,6 +74,9 @@ def eqsh(cmd: str):
 def eqsh_run(cmd: str):
     run_detached(eqsh(cmd))
 
+def eqsh_run_dev(cmd: str):
+    run(eqsh(cmd))
+
 def ipc(*cmd: str):
     if not is_equora_running(): exit_because("Equora is not running")
     cmd = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
@@ -92,31 +95,26 @@ def install_equora():
     ok("Installing Equora...")
     try:
         # check if ~/eqSh or ~/.config/quickshell/eqsh exists
-        exists = [os.path.exists(os.path.expanduser("~/eqSh")), os.path.exists(os.path.expanduser("~/.config/quickshell/eqsh"))]
-        if exists[0] or exists[1]:
+        if os.path.exists(os.path.expanduser("~/.local/share/equora")):
             warn("Equora is already installed")
             if input("Do you want to overwrite it? (y/n) ").lower() == "y":
-                if exists[0]:
-                    shutil.rmtree(os.path.expanduser("~/eqSh"))
-                if exists[1]:
-                    shutil.rmtree(os.path.expanduser("~/.config/quickshell/eqsh"))
+                shutil.rmtree(os.path.expanduser("~/.local/share/equora"))
             else:
                 exit_because("Installation aborted")
         # install equora
         os.mkdir(os.path.expanduser("~/eqSh"))
-        os.mkdir(os.path.expanduser("~/.config/quickshell/"))
         # git clone
         os.system("git clone https://github.com/eq-desktop/eqSh ~/eqSh")
-        # mv ~/eqSh/eqsh ~/.config/quickshell/
+        # mv ~/eqSh to ~/.local/share/equora
         os.mkdir(os.path.expanduser("~/.local/share/equora"))
-        if input("Do you want to also wallpapers? (y/n) ").lower() == "y":
+        if input("Do you want to also install wallpapers? (y/n) ").lower() == "y":
             os.system("git clone https://github.com/eq-desktop/wallpapers ~/eqSh/wallpapers")
             print("Wallpapers installed")
-        shutil.move(os.path.expanduser("~/eqSh"), os.path.expanduser("~/.local/share/equora"))
+        shutil.move(os.path.expanduser("~/eqSh"), os.path.expanduser("~/.local/share/equora/"))
         ok("Equora installed")
         print("Post-installation steps:")
         print("- Install Quickshell https://quickshell.org")
-        print("- Run `eqsh run` to start Equora")
+        print("- Run `equora run` to start Equora")
     except Exception as e:
         err(f"Failed to install Equora: {e}")
 
@@ -130,12 +128,12 @@ def process_name_from_pid(pid: int) -> str | None:
 def is_equora_running() -> bool:
     """Check if Equora is running or not."""
 
-    # get json of .config/quickshell/eqsh/Runtime/runtime
+    # get json of .local/share/equora/eqsh/Runtime/runtime
     contents = {}
     # if file doesnt exist
-    if not os.path.exists(os.path.expanduser("~/.config/quickshell/eqsh/Runtime/runtime")):
+    if not os.path.exists(os.path.expanduser("~/.local/share/equora/eqsh/Runtime/runtime")):
         return False
-    with open(os.path.expanduser("~/.config/quickshell/eqsh/Runtime/runtime"), "r") as f:
+    with open(os.path.expanduser("~/.local/share/equora/eqsh/Runtime/runtime"), "r") as f:
         contents = json.load(f)
 
     proc_id = contents["processId"]
@@ -143,12 +141,12 @@ def is_equora_running() -> bool:
     return process_name_from_pid(proc_id) != None
 
 def kill_equora():
-    # get json of .config/quickshell/eqsh/Runtime/runtime
+    # get json of .local/share/equora/eqsh/Runtime/runtime
     contents = {}
     # if file doesnt exist
-    if not os.path.exists(os.path.expanduser("~/.config/quickshell/eqsh/Runtime/runtime")):
+    if not os.path.exists(os.path.expanduser("~/.local/share/equora/eqsh/Runtime/runtime")):
         exit_because("Equora is not running")
-    with open(os.path.expanduser("~/.config/quickshell/eqsh/Runtime/runtime"), "r") as f:
+    with open(os.path.expanduser("~/.local/share/equora/eqsh/Runtime/runtime"), "r") as f:
         contents = json.load(f)
 
     proc_id = contents["processId"]
@@ -168,6 +166,12 @@ def run_detached(cmd: str):
         start_new_session=True,
     )
 
+def run(cmd: str):
+    subprocess.run(
+        args=cmd,
+        shell=True,
+    )
+
 def exit_because(msg: str, code: int=0):
     print(msg)
     sys.exit(code)
@@ -176,7 +180,8 @@ def main():
     parser = argparse.ArgumentParser(prog="equora", description="Equora Command Line Interface")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("run", help="Run Equora")
+    run = sub.add_parser("run", help="Run Equora")
+    run.add_argument("--dev", action="store_true", help="Run Equora in development mode")
 
     sub.add_parser("lock", help="Lock the screen")
     sub.add_parser("update", help="Look for updates")
@@ -217,7 +222,10 @@ def main():
 
     if args.command == "run":
         if is_equora_running(): exit_because("Equora is already running", 0)
-        eqsh_run("")
+        if args.dev:
+            eqsh_run_dev()
+        else:
+            eqsh_run("")
     elif args.command == "lock":
         ipc("eqlock", "lock")
     elif args.command == "install":
