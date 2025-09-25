@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "equora-cli"
-version = "0.1.3-5"
+version = "0.1.4"
 description = "CLI for the Equora Linux Desktop"
 authors = [
   { name="Jonas Schmidt", email="schmidtjonas662@gmail.com" }

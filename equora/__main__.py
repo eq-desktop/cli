@@ -85,7 +85,7 @@ def ipc(*cmd: str):
 def ipc_raw(*cmd: str):
     if not is_equora_running(): exit_because("Equora is not running")
     cmd = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
-    eqsh_run("ipc " + " ".join(cmd))
+    eqsh_run_dev("ipc " + " ".join(cmd))
 
 def ok(msg: str):
     print("\033[92m\033[38;5;46mOK: \033[0m" + msg)
