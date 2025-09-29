@@ -196,8 +196,6 @@ def main():
     sub.add_parser("destroy_notch_app", help="Forcefully quits any running notch app")
     notch.add_argument("file", help="The QML file to open")
     notch.add_argument("title", help="The title of the app")
-    notch.add_argument("timeout", help="The timeout in ms to destroy the app", type=int)
-    notch.add_argument("start_delay", help="The start delay in ms", type=int)
     sub.add_parser("notification_center", help="Open notification center")
     dialog = sub.add_parser("dialog", help="Open a dialog")
     dialog.add_argument("appName", help="The name of the app")
@@ -256,9 +254,9 @@ def main():
         with open(args.file, "r") as f:
             file_contents = f.read()
         safe_contents = file_contents.replace("\\", "\\\\").replace('"', '\\"')
-        ipc("notch", "instance", safe_contents, str(args.timeout), str(args.start_delay))
+        ipc("notch", "instance", safe_contents)
     elif args.command == "destroy_notch_app":
-        ipc("notch", "instanceHide")
+        ipc("notch", "closeInstance")
     elif args.command == "dialog":
         # appName: string, icon_path: string, title: string, description: string, accept: string, decline: string, commandAccept: string, commandDecline: string, customStyle: string
         ipc("systemDialogs", "newDialog", args.appName, args.iconPath, args.title, args.description, args.accept, args.decline, args.commandAccept, args.commandDecline, args.customStyle)
