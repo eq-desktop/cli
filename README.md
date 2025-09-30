@@ -46,7 +46,7 @@ equora <command> [arguments]
 | `settings`                                                                                                            | Open settings panel                         |
 | `update`                                                                                                              | Check for updates (not yet implemented)     |
 | `launchpad`                                                                                                           | Open the Launchpad                          |
-| `new_notch_app <file> <title> <timeout> <start_delay>`                                                                | Create a new Notch app                      |
+| `new_notch_app <file> <title>`                                                                | Create a new Notch app                      |
 | `destroy_notch_app`                                                                                                   | Forcefully quit a Notch app                 |
 | `dialog <appName> <iconPath> <title> <description> <accept> <decline> <commandAccept> <commandDecline> <customStyle>` | Open a customizable dialog                  |
 | `notification_center`                                                                                                 | Open the notification center                |

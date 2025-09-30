@@ -7,7 +7,7 @@ import shlex
 import json
 import shutil
 
-CONFIG_PATH = os.path.expanduser("~/.local/share/equora/eqsh/Runtime/config.json")
+CONFIG_PATH = os.path.expanduser("~/.local/share/equora/eqsh/runtime/config.json")
 
 def load_config():
     with open(CONFIG_PATH, "r") as f:
@@ -132,12 +132,12 @@ def process_name_from_pid(pid: int) -> str | None:
 def is_equora_running() -> bool:
     """Check if Equora is running or not."""
 
-    # get json of .local/share/equora/eqsh/Runtime/runtime
+    # get json of .local/share/equora/eqsh/runtime/runtime
     contents = {}
     # if file doesnt exist
-    if not os.path.exists(os.path.expanduser("~/.local/share/equora/eqsh/Runtime/runtime")):
+    if not os.path.exists(os.path.expanduser("~/.local/share/equora/eqsh/runtime/runtime")):
         return False
-    with open(os.path.expanduser("~/.local/share/equora/eqsh/Runtime/runtime"), "r") as f:
+    with open(os.path.expanduser("~/.local/share/equora/eqsh/runtime/runtime"), "r") as f:
         contents = json.load(f)
 
     proc_id = contents["processId"]
@@ -145,12 +145,12 @@ def is_equora_running() -> bool:
     return process_name_from_pid(proc_id) != None
 
 def kill_equora():
-    # get json of .local/share/equora/eqsh/Runtime/runtime
+    # get json of .local/share/equora/eqsh/runtime/runtime
     contents = {}
     # if file doesnt exist
-    if not os.path.exists(os.path.expanduser("~/.local/share/equora/eqsh/Runtime/runtime")):
+    if not os.path.exists(os.path.expanduser("~/.local/share/equora/eqsh/runtime/runtime")):
         exit_because("Equora is not running")
-    with open(os.path.expanduser("~/.local/share/equora/eqsh/Runtime/runtime"), "r") as f:
+    with open(os.path.expanduser("~/.local/share/equora/eqsh/runtime/runtime"), "r") as f:
         contents = json.load(f)
 
     proc_id = contents["processId"]
