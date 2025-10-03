@@ -171,10 +171,11 @@ def run_detached(cmd: str):
         start_new_session=True,
     )
 
-def run(cmd: str):
+def run(cmd: str, cwd: str=None):
     subprocess.run(
         args=cmd,
         shell=True,
+        cwd=cwd
     )
 
 def exit_because(msg: str, code: int=0):
@@ -243,6 +244,7 @@ def main():
         ipc("settings", "toggle")
     elif args.command == "update":
         run("pip install --upgrade git+https://github.com/eq-desktop/cli.git")
+        run("git pull ", cwd=os.path.expanduser("~/.local/share/equora"))
     elif args.command == "launchpad":
         ipc("launchpad", "toggle")
     elif args.command == "ipc":
