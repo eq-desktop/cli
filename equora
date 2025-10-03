@@ -243,7 +243,6 @@ def main():
     elif args.command == "settings":
         ipc("settings", "toggle")
     elif args.command == "update":
-        run("pip install --upgrade git+https://github.com/eq-desktop/cli.git")
         run("git pull ", cwd=os.path.expanduser("~/.local/share/equora"))
     elif args.command == "launchpad":
         ipc("launchpad", "toggle")
