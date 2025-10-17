@@ -80,7 +80,7 @@ def eqsh_run(cmd: str):
 
 def eqsh_run_dev(cmd: str):
     global location
-    run(eqsh(cmd, location))
+    run(eqsh(cmd))
 
 def ipc(*cmd: str):
     if not is_equora_running(): exit_because("Equora is not running")
