@@ -8,6 +8,8 @@ import json
 import shutil
 
 CONFIG_PATH = os.path.expanduser("~/.local/share/equora/eqsh/runtime/config.json")
+global location
+location = "/usr/share/aureli"
 
 def load_config():
     with open(CONFIG_PATH, "r") as f:
@@ -68,13 +70,15 @@ def reset_config():
     save_config({})
 
 
-def eqsh(cmd: str, location: str="/usr/share/aureli"):
+def eqsh(cmd: str):
+    global location
     return ("qs -p " + location + " " + cmd)
 
 def eqsh_run(cmd: str):
     run_detached(eqsh(cmd))
 
-def eqsh_run_dev(cmd: str, location: str="/usr/share/aureli"):
+def eqsh_run_dev(cmd: str):
+    global location
     run(eqsh(cmd, location))
 
 def ipc(*cmd: str):
@@ -183,12 +187,13 @@ def exit_because(msg: str, code: int=0):
     sys.exit(code)
 
 def main():
+    global location
     parser = argparse.ArgumentParser(prog="equora", description="Equora Command Line Interface")
     sub = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument("-l", "--location", default="/usr/share/aureli", help="Location of Equora")
 
     run_cmd = sub.add_parser("run", help="Run Equora")
     run_cmd.add_argument("--dev", action="store_true", help="Run Equora in development mode")
-    run_cmd.add_argument("-l", "--location", default="/usr/share/aureli", help="Location of Equora")
 
     sub.add_parser("lock", help="Lock the screen")
     sub.add_parser("update", help="Look for updates")
@@ -231,10 +236,12 @@ def main():
 
     args = parser.parse_args()
 
+    location = args.location
+
     if args.command == "run":
         if is_equora_running(): exit_because("Equora is already running", 0)
         if args.dev:
-            eqsh_run_dev("", args.location)
+            eqsh_run_dev("")
         else:
             eqsh_run("", args.location)
     elif args.command == "lock":
