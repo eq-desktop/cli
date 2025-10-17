@@ -7,7 +7,8 @@ import shlex
 import json
 import shutil
 
-CONFIG_PATH = os.path.expanduser("~/.local/share/equora/eqsh/runtime/config.json")
+RUNTIME_PATH = os.path.expanduser("~/.config/aureli")
+CONFIG_PATH = os.path.expanduser(RUNTIME_PATH + "/config.json")
 global location
 location = "/usr/share/aureli"
 
@@ -103,7 +104,7 @@ def err(msg: str):
 def install_equora():
     ok("Installing Equora...")
     try:
-        # check if ~/eqSh or ~/.config/quickshell/eqsh exists
+        # check exist
         if os.path.exists(os.path.expanduser("~/.local/share/equora")):
             warn("Equora is already installed")
             if input("Do you want to overwrite it? (y/n) ").lower() == "y":
@@ -140,9 +141,9 @@ def is_equora_running() -> bool:
     # get json of .local/share/equora/eqsh/runtime/runtime
     contents = {}
     # if file doesnt exist
-    if not os.path.exists(os.path.expanduser("~/.local/share/equora/eqsh/runtime/runtime")):
+    if not os.path.exists(os.path.expanduser(RUNTIME_PATH + "/runtime")):
         return False
-    with open(os.path.expanduser("~/.local/share/equora/eqsh/runtime/runtime"), "r") as f:
+    with open(os.path.expanduser(RUNTIME_PATH + "/runtime"), "r") as f:
         contents = json.load(f)
 
     proc_id = contents["processId"]
@@ -153,9 +154,9 @@ def kill_equora():
     # get json of .local/share/equora/eqsh/runtime/runtime
     contents = {}
     # if file doesnt exist
-    if not os.path.exists(os.path.expanduser("~/.local/share/equora/eqsh/runtime/runtime")):
+    if not os.path.exists(os.path.expanduser(RUNTIME_PATH + "/runtime")):
         exit_because("Equora is not running")
-    with open(os.path.expanduser("~/.local/share/equora/eqsh/runtime/runtime"), "r") as f:
+    with open(os.path.expanduser(RUNTIME_PATH + "/runtime"), "r") as f:
         contents = json.load(f)
 
     proc_id = contents["processId"]
