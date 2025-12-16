@@ -10,7 +10,7 @@ import shutil
 RUNTIME_PATH = os.path.expanduser("~/.config/aureli")
 CONFIG_PATH = os.path.expanduser(RUNTIME_PATH + "/config.json")
 global location
-location = "/usr/share/aureli"
+location = os.path.expanduser("~/.local/share/equora/eqsh")
 
 def load_config():
     with open(CONFIG_PATH, "r") as f:
@@ -191,7 +191,7 @@ def main():
     global location
     parser = argparse.ArgumentParser(prog="equora", description="Equora Command Line Interface")
     sub = parser.add_subparsers(dest="command", required=True)
-    parser.add_argument("-l", "--location", default="/usr/share/aureli", help="Location of Equora")
+    parser.add_argument("-l", "--location", default=location, help="Location of Equora")
 
     run_cmd = sub.add_parser("run", help="Run Equora")
     run_cmd.add_argument("--dev", action="store_true", help="Run Equora in development mode")
@@ -244,7 +244,7 @@ def main():
         if args.dev:
             eqsh_run_dev("")
         else:
-            eqsh_run("", args.location)
+            eqsh_run("")
     elif args.command == "lock":
         ipc("eqlock", "lock")
     elif args.command == "install":
