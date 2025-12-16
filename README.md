@@ -44,6 +44,7 @@ equora <command> [arguments]
 | Command                                                                                                               | Description                                 |
 | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | `run`                                                                                                                 | Start Equora                                |
+| `install`                                                                                                                 | Install Equora                   |
 | `lock`                                                                                                                | Lock the screen                             |
 | `settings`                                                                                                            | Open settings panel                         |
 | `update`                                                                                                              | Check for updates (not yet implemented)     |
