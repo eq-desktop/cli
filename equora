@@ -12,7 +12,10 @@ CONFIG_PATH = os.path.expanduser(RUNTIME_PATH + "/config.json")
 global location
 location = os.path.expanduser("~/.local/share/equora/eqsh")
 
-os.environ["QT_LOGGING_RULES"] = "qml.debug=true"
+if os.environ.get("QT_LOGGING_RULES", False):
+    os.environ["QT_LOGGING_RULES"] += ";qml.debug=true"
+else:
+    os.environ["QT_LOGGING_RULES"] = "qml.debug=true"
 
 def load_config():
     with open(CONFIG_PATH, "r") as f:

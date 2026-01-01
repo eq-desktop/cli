@@ -23,7 +23,7 @@ With Equora CLI, you can:
 
 ## ⚡ Installation
 
-Make sure you have **Python 3** installed. Install it using pip:
+Make sure you have **Python 3** installed. Install it by cloning the repo:
 
 ```bash
 git clone https://github.com/eq-desktop/cli.git
