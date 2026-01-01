@@ -122,7 +122,7 @@ def install_equora():
         os.system("git clone https://github.com/eq-desktop/eqSh ~/eqSh")
         os.system("git submodule update --init --recursive")
         # mv ~/eqSh to ~/.local/share/equora
-        if input("Do you want to also install wallpapers? (y/n) ").lower() == "y":
+        if input("Do you want to also install wallpapers (Large files)? (y/n) ").lower() == "y":
             os.system("git clone https://github.com/eq-desktop/wallpapers ~/eqSh/wallpapers")
             print("Wallpapers installed")
         shutil.move(os.path.expanduser("~/eqSh"), os.path.expanduser("~/.local/share/equora/"))
