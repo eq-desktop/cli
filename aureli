@@ -88,14 +88,14 @@ def eqsh_run_dev(cmd: str):
     run(eqsh(cmd))
 
 def ipc(*cmd: str):
-    if not is_equora_running(): exit_because("Equora is not running")
-    cmd = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
-    eqsh_run("ipc " + "call " + " ".join(cmd))
+    if not is_aureli_running(): exit_because("Aureli is not running")
+    cmd_list = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
+    eqsh_run("ipc " + "call " + " ".join(cmd_list))
 
 def ipc_raw(*cmd: str):
-    if not is_equora_running(): exit_because("Equora is not running")
-    cmd = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
-    eqsh_run_dev("ipc " + " ".join(cmd))
+    if not is_aureli_running(): exit_because("Aureli is not running")
+    cmd_list = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
+    eqsh_run_dev("ipc " + " ".join(cmd_list))
 
 def ok(msg: str):
     print("\033[92m\033[38;5;46mOK: \033[0m" + msg)
@@ -106,17 +106,17 @@ def warn(msg: str):
 def err(msg: str):
     print("\033[91m\033[38;5;196mERROR: \033[0m" + msg)
 
-def install_equora():
-    ok("Installing Equora...")
+def install_aureli():
+    ok("Installing Aureli...")
     try:
         # check exist
         if os.path.exists(os.path.expanduser("~/.local/share/equora")):
-            warn("Equora is already installed")
+            warn("Aureli is already installed")
             if input("Do you want to overwrite it? (y/n) ").lower() == "y":
                 shutil.rmtree(os.path.expanduser("~/.local/share/equora"))
             else:
                 exit_because("Installation aborted")
-        # install equora
+        # install aureli
         os.mkdir(os.path.expanduser("~/eqSh"))
         # git clone
         os.system("git clone https://github.com/eq-desktop/eqSh ~/eqSh")
@@ -126,12 +126,12 @@ def install_equora():
             os.system("git clone https://github.com/eq-desktop/wallpapers ~/eqSh/wallpapers")
             print("Wallpapers installed")
         shutil.move(os.path.expanduser("~/eqSh"), os.path.expanduser("~/.local/share/equora/"))
-        ok("Equora installed")
+        ok("Aureli installed")
         print("Post-installation steps:")
         print("- Install Quickshell https://quickshell.org")
-        print("- Run `equora run` to start Equora")
+        print("- Run `au run` to start Aureli")
     except Exception as e:
-        err(f"Failed to install Equora: {e}")
+        err(f"Failed to install Aureli: {e}")
 
 def process_name_from_pid(pid: int) -> str | None:
     try:
@@ -140,8 +140,8 @@ def process_name_from_pid(pid: int) -> str | None:
     except FileNotFoundError:
         return None  # process does not exist
 
-def is_equora_running() -> bool:
-    """Check if Equora is running or not."""
+def is_aureli_running() -> bool:
+    """Check if Aureli is running or not."""
 
     # get json of .local/share/equora/eqsh/runtime/runtime
     contents = {}
@@ -155,19 +155,19 @@ def is_equora_running() -> bool:
 
     return process_name_from_pid(proc_id) != None
 
-def kill_equora():
+def kill_aureli():
     # get json of .local/share/equora/eqsh/runtime/runtime
     contents = {}
     # if file doesnt exist
     if not os.path.exists(os.path.expanduser(RUNTIME_PATH + "/runtime")):
-        exit_because("Equora is not running")
+        exit_because("Aureli is not running")
     with open(os.path.expanduser(RUNTIME_PATH + "/runtime"), "r") as f:
         contents = json.load(f)
 
     proc_id = contents["processId"]
 
-    if not is_equora_running():
-        exit_because("Equora is not running")
+    if not is_aureli_running():
+        exit_because("Aureli is not running")
 
     os.kill(int(proc_id), 9)
 
@@ -181,7 +181,7 @@ def run_detached(cmd: str):
         start_new_session=True,
     )
 
-def run(cmd: str, cwd: str=None):
+def run(cmd: str, cwd: str|None=None):
     subprocess.run(
         args=cmd,
         shell=True,
@@ -194,16 +194,16 @@ def exit_because(msg: str, code: int=0):
 
 def main():
     global location
-    parser = argparse.ArgumentParser(prog="equora", description="Equora Command Line Interface")
+    parser = argparse.ArgumentParser(prog="aureli", description="Aureli Command Line Interface")
     sub = parser.add_subparsers(dest="command", required=True)
-    parser.add_argument("-l", "--location", default=location, help="Location of Equora")
+    parser.add_argument("-l", "--location", default=location, help="Location of Aureli")
 
-    run_cmd = sub.add_parser("run", help="Run Equora")
-    run_cmd.add_argument("--dev", action="store_true", help="Run Equora in development mode")
+    run_cmd = sub.add_parser("run", help="Run Aureli")
+    run_cmd.add_argument("--dev", action="store_true", help="Run Aureli in development mode")
 
     sub.add_parser("lock", help="Lock the screen")
     sub.add_parser("update", help="Look for updates")
-    sub.add_parser("install", help="Install Equora")
+    sub.add_parser("install", help="Install Aureli")
     sub.add_parser("settings", help="Open settings")
     sub.add_parser("launchpad", help="Open launchpad")
     notch = sub.add_parser("new_notch_app", help="Create a new notch app")
@@ -221,8 +221,8 @@ def main():
     dialog.add_argument("commandAccept", help="The command to run when the accept button is clicked")
     dialog.add_argument("commandDecline", help="The command to run when the decline button is clicked")
     dialog.add_argument("customStyle", help="The custom style of the dialog")
-    sub.add_parser("quit", help="Quit Equora")
-    sub.add_parser("restart", help="Restart Equora")
+    sub.add_parser("quit", help="Quit Aureli")
+    sub.add_parser("restart", help="Restart Aureli")
     set_cmd = sub.add_parser("set", help="Set a setting")
     set_cmd.add_argument("setting", help="The setting to set (e.g. bar.height)")
     set_cmd.add_argument("value", help="The value to set the setting to")
@@ -245,7 +245,7 @@ def main():
     location = args.location
 
     if args.command == "run":
-        if is_equora_running(): exit_because("Equora is already running", 0)
+        if is_aureli_running(): exit_because("Aureli is already running", 0)
         if args.dev:
             eqsh_run_dev("")
         else:
@@ -253,7 +253,7 @@ def main():
     elif args.command == "lock":
         ipc("eqlock", "lock")
     elif args.command == "install":
-        install_equora()
+        install_aureli()
     elif args.command == "settings":
         ipc("settings", "toggle")
     elif args.command == "update":
@@ -279,9 +279,9 @@ def main():
     elif args.command == "notification_center":
         ipc("notificationCenter", "toggle")
     elif args.command == "quit":
-        kill_equora()
+        kill_aureli()
     elif args.command == "restart":
-        kill_equora()
+        kill_aureli()
         eqsh_run("")
     elif args.command == "set":
         set_setting(args.setting, args.value)

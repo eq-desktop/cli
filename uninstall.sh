@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-echo "Uninstalling Equora..."
+echo "Uninstalling Aureli..."
 
-sudo rm /usr/bin/equora
+sudo rm /usr/local/bin/aureli
+sudo rm /usr/local/bin/au
 
 echo "Uninstallation complete."

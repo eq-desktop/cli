@@ -1,4 +1,4 @@
-# Equora CLI
+# Aureli CLI
 
 <p align="center">
   <i>“Your desktop, your rules. Full control at your fingertips.”</i>
@@ -8,14 +8,14 @@
 
 ## 📌 Overview
 
-**Equora CLI** is the command-line interface for **Equora** — the next-generation Linux desktop shell and environment.  
-It allows you to **launch, control, and configure** every aspect of Equora, from panels and launchers to dialogs, notifications, and Notch apps.
+**Aureli CLI** is the command-line interface for **Aureli** — the next-generation Linux desktop shell and environment.  
+It allows you to **launch, control, and configure** every aspect of Aureli, from panels and launchers to dialogs, notifications, and Notch apps.
 
-With Equora CLI, you can:  
+With Aureli CLI, you can:  
 
-- Start, restart, or quit the Equora shell.  
+- Start, restart, or quit the Aureli shell.  
 - Lock your screen or open the notification center.  
-- Configure settings dynamically via JSON-backed configuration.  
+- Configure settings dynamically.  
 - Create and manage Notch apps (dynamic popups and mini-apps).  
 - Launch dialogs with fully customizable content and behavior.  
 
@@ -36,15 +36,15 @@ cd cli/
 ## 🚀 Usage
 
 ```bash
-equora <command> [arguments]
+au <command> [arguments]
 ```
 
 ### Available Commands
 
 | Command                                                                                                               | Description                                 |
 | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `run`                                                                                                                 | Start Equora                                |
-| `install`                                                                                                                 | Install Equora                   |
+| `run`                                                                                                                 | Start Aureli                                |
+| `install`                                                                                                                 | Install Aureli                   |
 | `lock`                                                                                                                | Lock the screen                             |
 | `settings`                                                                                                            | Open settings panel                         |
 | `update`                                                                                                              | Check for updates (not yet implemented)     |
@@ -53,8 +53,8 @@ equora <command> [arguments]
 | `destroy_notch_app`                                                                                                   | Forcefully quit a Notch app                 |
 | `dialog <appName> <iconPath> <title> <description> <accept> <decline> <commandAccept> <commandDecline> <customStyle>` | Open a customizable dialog                  |
 | `notification_center`                                                                                                 | Open the notification center                |
-| `quit`                                                                                                                | Quit Equora                                 |
-| `restart`                                                                                                             | Restart Equora                              |
+| `quit`                                                                                                                | Quit Aureli                                 |
+| `restart`                                                                                                             | Restart Aureli                              |
 | `set <setting> <value>`                                                                                               | Set a specific setting (e.g., `bar.height`) |
 | `get <setting>`                                                                                                       | Get the value of a setting                  |
 | `reset <setting> [--all]`                                                                                             | Reset a setting or all settings             |
@@ -63,30 +63,30 @@ equora <command> [arguments]
 
 ## 🛠 Configuration
 
-Equora CLI reads and writes settings directly to Equora Shell:
+Aureli CLI reads and writes settings directly to Aureli Shell:
 
 * **Set values dynamically**:
 
   ```bash
-  equora set bar.height 22
+  au set bar.height 22
   ```
 * **Get current values**:
 
   ```bash
-  equora get bar.height
+  au get bar.height
   ```
 * **Reset a specific setting or all settings**:
 
   ```bash
-  equora reset bar.height
-  equora reset --all
+  au reset bar.height
+  au reset --all
   ```
 
 ---
 
 ## 🔧 Development
 
-Equora CLI is built in **Python 3** and designed to integrate seamlessly with the Equora shell.
+Aureli CLI is built in **Python 3** and designed to integrate seamlessly with the Aureli shell.
 Feel free to fork, contribute, or extend the CLI to suit your needs.
 
 ---
