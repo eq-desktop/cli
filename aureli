@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(RUNTIME_PATH + "/config.json")
 global location
 global aureli_location
 aureli_location = os.path.expanduser("~/.local/share/equora")
-location = os.path.expanduser(aureli_location / "eqsh")
+location = os.path.expanduser(aureli_location + "/eqsh")
 
 if os.environ.get("QT_LOGGING_RULES", False):
     os.environ["QT_LOGGING_RULES"] += ";qml.debug=true"
@@ -146,10 +146,10 @@ def install_wallpapers():
     ok("Downloading Wallpapers...")
     try:
         # check exist
-        if os.path.exists(os.path.expanduser(aureli_location / "wallpapers")):
+        if os.path.exists(os.path.expanduser(aureli_location + "/wallpapers")):
             warn("Wallpapers are already installed")
             if input("Do you want to overwrite them? (y/n) ").lower() == "y":
-                shutil.rmtree(os.path.expanduser(aureli_location / "wallpapers"))
+                shutil.rmtree(os.path.expanduser(aureli_location + "/wallpapers"))
             else:
                 exit_because("Download aborted")
         os.system(f"git clone https://github.com/eq-desktop/wallpapers {aureli_location}/wallpapers")
