@@ -10,7 +10,9 @@ import shutil
 RUNTIME_PATH = os.path.expanduser("~/.config/aureli")
 CONFIG_PATH = os.path.expanduser(RUNTIME_PATH + "/config.json")
 global location
-location = os.path.expanduser("~/.local/share/equora/eqsh")
+global aureli_location
+aureli_location = os.path.expanduser("~/.local/share/equora")
+location = os.path.expanduser(aureli_location / "eqsh")
 
 if os.environ.get("QT_LOGGING_RULES", False):
     os.environ["QT_LOGGING_RULES"] += ";qml.debug=true"
@@ -48,10 +50,18 @@ def set_setting(key_path: str, value: str):
 
     ref[keys[-1]] = val
     save_config(cfg)
-    print(f"Set {key_path} = {val}")
+    if val == True: val = "true"
+    if val == False: val = "false"
+    if isinstance(val, list): val = ", ".join(val)
+    print(f"\033[92mSet {key_path} = {val}\033[0m")
 
 def get_setting(key_path: str):
     cfg = load_config()
+    if key_path == "all":
+        print("\033[All Sections:\033[0m")
+        for k in cfg:
+            print(f"\033[94m- {k}\033[0m")
+        return
     keys = key_path.split(".")
     ref = cfg
     for k in keys:
@@ -59,6 +69,32 @@ def get_setting(key_path: str):
             print(f"Setting {key_path} not found")
             return
         ref = ref[k]
+    # style ref
+    if ref == True: ref = "\033[92mtrue\033[0m"
+    if ref == False: ref = "\033[91mfalse\033[0m"
+    if isinstance(ref, list): ref = ", ".join(ref)
+    if isinstance(ref, dict):
+        final_string = ""
+        def recurse(ref):
+            nonlocal final_string
+            for k in ref:
+                if isinstance(ref[k], dict):
+                    final_string += f"\033[94m{k}\033[0m\n"
+                    recurse(ref[k])
+                else:
+                    val = ref[k]
+                    if val == True: val = "true"
+                    if val == False: val = "false"
+                    if isinstance(val, list): val = ", ".join(val)
+                    if val == "true":
+                        final_string += f"\033[94m{k}\033[0m = \033[92m{val}\033[0m\n"
+                    elif val == "false":
+                        final_string += f"\033[94m{k}\033[0m = \033[91m{val}\033[0m\n"
+                    else:
+                        final_string += f"\033[94m{k}\033[0m = \033[90m{val}\033[0m\n"
+        recurse(ref)
+        print(final_string)
+        return
     print(ref)
 
 def reset_setting(setting: str):
@@ -74,7 +110,6 @@ def reset_setting(setting: str):
 
 def reset_config():
     save_config({})
-
 
 def eqsh(cmd: str):
     global location
@@ -106,14 +141,31 @@ def warn(msg: str):
 def err(msg: str):
     print("\033[91m\033[38;5;196mERROR: \033[0m" + msg)
 
+def install_wallpapers():
+    global aureli_location
+    ok("Downloading Wallpapers...")
+    try:
+        # check exist
+        if os.path.exists(os.path.expanduser(aureli_location / "wallpapers")):
+            warn("Wallpapers are already installed")
+            if input("Do you want to overwrite them? (y/n) ").lower() == "y":
+                shutil.rmtree(os.path.expanduser(aureli_location / "wallpapers"))
+            else:
+                exit_because("Download aborted")
+        os.system(f"git clone https://github.com/eq-desktop/wallpapers {aureli_location}/wallpapers")
+        ok("Wallpapers installed")
+    except Exception as e:
+        err(f"Failed to install Wallpapers: {e}")
+
 def install_aureli():
+    global aureli_location
     ok("Installing Aureli...")
     try:
         # check exist
-        if os.path.exists(os.path.expanduser("~/.local/share/equora")):
+        if os.path.exists(os.path.expanduser(aureli_location)):
             warn("Aureli is already installed")
             if input("Do you want to overwrite it? (y/n) ").lower() == "y":
-                shutil.rmtree(os.path.expanduser("~/.local/share/equora"))
+                shutil.rmtree(os.path.expanduser(aureli_location))
             else:
                 exit_because("Installation aborted")
         # install aureli
@@ -125,7 +177,7 @@ def install_aureli():
         if input("Do you want to also install wallpapers (Large files)? (y/n) ").lower() == "y":
             os.system("git clone https://github.com/eq-desktop/wallpapers ~/eqSh/wallpapers")
             print("Wallpapers installed")
-        shutil.move(os.path.expanduser("~/eqSh"), os.path.expanduser("~/.local/share/equora/"))
+        shutil.move(os.path.expanduser("~/eqSh"), os.path.expanduser(aureli_location))
         ok("Aureli installed")
         print("Post-installation steps:")
         print("- Install Quickshell https://quickshell.org")
@@ -194,9 +246,11 @@ def exit_because(msg: str, code: int=0):
 
 def main():
     global location
+    global aureli_location
     parser = argparse.ArgumentParser(prog="aureli", description="Aureli Command Line Interface")
     sub = parser.add_subparsers(dest="command", required=True)
     parser.add_argument("-l", "--location", default=location, help="Location of Aureli")
+    parser.add_argument("-L", "--location-aureli", default=aureli_location, help="Location to install Aureli to")
 
     run_cmd = sub.add_parser("run", help="Run Aureli")
     run_cmd.add_argument("--dev", action="store_true", help="Run Aureli in development mode")
@@ -204,6 +258,7 @@ def main():
     sub.add_parser("lock", help="Lock the screen")
     sub.add_parser("update", help="Look for updates")
     sub.add_parser("install", help="Install Aureli")
+    sub.add_parser("installWallpapers", help="Install Aureli's default wallpapers")
     sub.add_parser("settings", help="Open settings")
     sub.add_parser("launchpad", help="Open launchpad")
     notch = sub.add_parser("new_notch_app", help="Create a new notch app")
@@ -243,6 +298,7 @@ def main():
     args = parser.parse_args()
 
     location = args.location
+    aureli_location = args.location_aureli
 
     if args.command == "run":
         if is_aureli_running(): exit_because("Aureli is already running", 0)
@@ -254,10 +310,12 @@ def main():
         ipc("eqlock", "lock")
     elif args.command == "install":
         install_aureli()
+    elif args.command == "installWallpapers":
+        install_wallpapers()
     elif args.command == "settings":
         ipc("settings", "toggle")
     elif args.command == "update":
-        run("git pull ", cwd=os.path.expanduser("~/.local/share/equora"))
+        run("git pull ", cwd=os.path.expanduser(aureli_location))
     elif args.command == "launchpad":
         ipc("launchpad", "toggle")
     elif args.command == "ipc":
