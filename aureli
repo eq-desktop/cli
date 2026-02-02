@@ -1,14 +1,513 @@
 #!/usr/bin/env python3
 import argparse
+import random
+import string
 import subprocess
 import sys
 import os
 import shlex
 import json
 import shutil
+import re
+import subprocess
+import tempfile
+from pathlib import Path
+from urllib.parse import urlparse
+UUID = 0
+
+####################################
+#                                  #
+# Kavo Parser Elephant-1           #
+#                                  #
+####################################
+
+def new_part(
+    name="",
+    kind="object",
+    type="KavoObject",
+    children=None,
+    path="",
+    id=None,
+    args=None,
+    value=None,
+    properties=None,
+):
+    global UUID
+    if children is None:
+        children = []
+    if args is None:
+        args = []
+    if properties is None:
+        properties = {}
+    if id is None:
+        id = UUID
+        UUID += 1
+
+    return {
+        "name": name,
+        "kind": kind,
+        "type": type,
+        "id": id,
+        "arguments": args,
+        "path": path,
+        "value": value,
+        "properties": properties,
+        "children": children,
+    }
+
+
+# ---------------- Utility ---------------- #
+
+def strip_comments(src: str) -> str:
+    src = re.sub(r"//.*$", "", src, flags=re.MULTILINE)
+    src = re.sub(r"/\*[\s\S]*?\*/", "", src)
+    return src
+
+
+def normalize_indent(block: str) -> str:
+    lines = block.split("\n")
+
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+
+    min_indent = float("inf")
+    for line in lines:
+        if not line.strip():
+            continue
+        match = re.match(r"^(\s+)", line)
+        if match:
+            min_indent = min(min_indent, len(match.group(1)))
+        else:
+            min_indent = 0
+            break
+
+    if not min_indent or min_indent == float("inf"):
+        min_indent = 0
+
+    return "\n".join(
+        line[min_indent:] if line.startswith(" " * min_indent) else line
+        for line in lines
+    )
+
+
+def scan_block(lines, start_index):
+    state = {"in_string": False, "escape": False, "depth": 1}
+    body = []
+    i = start_index
+
+    while i < len(lines):
+        line = lines[i]
+        for c in line:
+            if state["escape"]:
+                state["escape"] = False
+                continue
+            if c == "\\":
+                state["escape"] = True
+                continue
+            if c == '"':
+                state["in_string"] = not state["in_string"]
+                continue
+            if not state["in_string"]:
+                if c == "{":
+                    state["depth"] += 1
+                if c == "}":
+                    state["depth"] -= 1
+
+        if state["depth"] == 0:
+            break
+        body.append(line)
+        i += 1
+
+    return {"body": "\n".join(body), "endIndex": i}
+
+
+def parse_value(raw: str):
+    raw = raw.strip()
+    if re.match(r'^".*"$', raw):
+        return {"type": "string", "value": raw[1:-1]}
+    if re.match(r"^-?\d+(\.\d+)?$", raw):
+        return {"type": "number", "value": float(raw) if "." in raw else int(raw)}
+    if raw in ("true", "false"):
+        return {"type": "boolean", "value": raw == "true"}
+    return {"type": "string", "value": raw}
+
+
+# ---------------- Inline Property Parser ---------------- #
+
+def parse_inline_props(s: str):
+    props = {}
+    i = 0
+
+    def skip_spaces():
+        nonlocal i
+        while i < len(s) and s[i].isspace():
+            i += 1
+
+    def read_key_or_flag():
+        nonlocal i
+        skip_spaces()
+        if i < len(s) and s[i] == '"':
+            i += 1
+            start = i
+            while i < len(s) and s[i] != '"':
+                i += 1
+            val = s[start:i]
+            i += 1
+            return val
+
+        start = i
+        while i < len(s) and not re.match(r"[\s:]", s[i]):
+            i += 1
+        return s[start:i]
+
+    def read_value():
+        nonlocal i
+        skip_spaces()
+        if i < len(s) and s[i] == '"':
+            i += 1
+            start = i
+            while i < len(s) and s[i] != '"':
+                i += 1
+            val = s[start:i]
+            i += 1
+            return val
+
+        start = i
+        while i < len(s) and not s[i].isspace():
+            i += 1
+        return s[start:i]
+
+    while i < len(s):
+        skip_spaces()
+        if i >= len(s):
+            break
+
+        key = read_key_or_flag()
+        skip_spaces()
+
+        if i < len(s) and s[i] == ":":
+            i += 1
+            raw = read_value()
+            if re.match(r"^-?\d+(\.\d+)?$", raw):
+                props[key] = float(raw) if "." in raw else int(raw)
+            elif raw in ("true", "false"):
+                props[key] = raw == "true"
+            else:
+                props[key] = raw
+        else:
+            props[key] = True
+
+    return props
+
+
+# ---------------- Parser ---------------- #
+
+def parse(data: str, parent=None):
+    data = strip_comments(data)
+    lines = data.split("\n")
+    root = parent or new_part(name="root", path="root")
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line:
+            i += 1
+            continue
+
+        # IMPORT
+        if line.startswith("@import "):
+            file_path = re.split(r'import(?: nonfinal)?\s+', line)[1].replace('"', '').replace("'", "").strip()
+
+            new_node = new_part(
+                name="import:Unknown",
+                kind="import",
+                path=f"{root['path']}.import:Unknown",
+                type="KavoImport",
+                value=file_path,
+            )
+            new_node["name"] = f"import:{new_node['id']}"
+            new_node["path"] = f"{root['path']}.{new_node['name']}"
+            root["children"].append(new_node)
+            i += 1
+            continue
+
+        # FUNCTION
+        if re.match(r'^[\w]+\(.*\)\s*\{?$', line):
+            name = line.split("(")[0].strip()
+            args = [a.strip() for a in re.search(r'\((.*?)\)', line).group(1).split(",") if a.strip()]
+
+            node = new_part(
+                name=name,
+                kind="function",
+                path=f"{root['path']}.{name}",
+                type="KavoFunction",
+                args=args,
+            )
+
+            if "{" not in line:
+                i += 1
+
+            result = scan_block(lines, i + 1)
+            node["children"].append(normalize_indent(result["body"]))
+            root["children"].append(node)
+            i = result["endIndex"] + 1
+            continue
+
+        # SECTION
+        if "{" in line:
+            name = line.split(" ")[0]
+            prop_string = re.sub(r"[{}]", "", line[len(name):]).strip()
+            node = new_part(name=name, kind="section", path=f"{root['path']}.{name}", type="KavoSection")
+
+            if prop_string:
+                node["properties"] = parse_inline_props(prop_string)
+
+            result = scan_block(lines, i + 1)
+            parse(result["body"], node)
+            root["children"].append(node)
+            i = result["endIndex"] + 1
+            continue
+
+        # PROPERTY
+        if ":" in line:
+            k, v = re.split(r":(.+)", line, maxsplit=1)[:-1]
+            parsed = parse_value(v)
+            root["children"].append(new_part(
+                name=k.strip(),
+                kind="property",
+                path=f"{root['path']}.{k.strip()}",
+                type=parsed["type"],
+                value=parsed["value"],
+            ))
+            i += 1
+            continue
+
+        raise ValueError(f"Unknown syntax: {line}")
+
+    return root
+
+class KvoNode:
+    def __init__(self, obj: dict):
+        self._obj = obj
+
+    # ---------- Basic access ---------- #
+
+    @property
+    def raw(self):
+        return self._obj
+
+    @property
+    def children(self):
+        return [KvoNode(c) for c in self._obj.get("children", [])]
+
+    @children.setter
+    def children(self, children):
+        self._obj["children"] = [
+            c.raw if isinstance(c, KvoNode) else c for c in children
+        ]
+
+    @property
+    def id(self):
+        return self._obj.get("id")
+
+    @id.setter
+    def id(self, value):
+        self._obj["id"] = value
+
+    @property
+    def path(self):
+        return self._obj.get("path")
+
+    @path.setter
+    def path(self, value):
+        self._obj["path"] = value
+
+    @property
+    def name(self):
+        return self._obj.get("name")
+
+    @name.setter
+    def name(self, value):
+        self._obj["name"] = value
+
+    @property
+    def kind(self):
+        return self._obj.get("kind")
+
+    @kind.setter
+    def kind(self, value):
+        self._obj["kind"] = value
+
+    @property
+    def type(self):
+        return self._obj.get("type")
+
+    @type.setter
+    def type(self, value):
+        self._obj["type"] = value
+
+    @property
+    def args(self):
+        return self._obj.get("args")
+
+    @args.setter
+    def args(self, value):
+        self._obj["args"] = value
+
+    @property
+    def value(self):
+        return self._obj.get("value")
+
+    @value.setter
+    def value(self, value):
+        self._obj["value"] = value
+
+    @property
+    def properties(self):
+        return self._obj.get("properties", {})
+
+    @properties.setter
+    def properties(self, value):
+        self._obj["properties"] = value
+    
+    def add_property(self, key, value):
+        self._obj["properties"][key] = value
+    
+    def remove_property(self, key):
+        del self._obj["properties"][key]
+
+    # ---------- Path helpers ---------- #
+
+    def path_trimmed(self):
+        return ".".join(self.path.split(".")[1:])
+
+    def path_last(self):
+        return self.path.split(".")[-1]
+
+    def path_parent(self):
+        return ".".join(self.path.split(".")[1:-1])
+
+    def path_children(self):
+        return self.path.split(".")[1:]
+
+    def paths(self):
+        return self.path.split(".")
+
+    # ---------- Find ---------- #
+
+    def find(self, name):
+        return next((c for c in self.children if c.name == name), None)
+
+    f = find
+
+    def find_all(self, name):
+        return [c for c in self.children if c.name == name]
+
+    fA = find_all
+
+    # ---------- Properties ---------- #
+
+    def prop(self, key):
+        return self.properties.get(key)
+
+    p = prop
+
+    # ---------- Filters ---------- #
+
+    def filter_kind(self, kind):
+        return [c for c in self.children if c.kind == kind]
+
+    fK = filter_kind
+
+    # ---------- Recursive search ---------- #
+
+    def search(self, name):
+        if self.name == name:
+            return self
+        for child in self.children:
+            found = child.search(name)
+            if found:
+                return found
+        return None
+
+    s = search
+
+    # ---------- Debug print ---------- #
+
+    def print(self, indent=0):
+        pad = " " * (indent * 2)
+        out = f"{pad}{self.kind}: {self.name}\n"
+        if self.kind == "function":
+            return out
+        for child in self.children:
+            out += child.print(indent + 1)
+        return out
+
+    pr = print
+
+    def print_now(self, indent=0):
+        pad = " " * (indent * 2)
+        print(f"{pad}{self.kind}: {self.name}")
+        if self.kind == "function":
+            return
+        for child in self.children:
+            child.print_now(indent + 1)
+
+    prNow = print_now
+
+    # ---------- Child operations ---------- #
+
+    def map_children(self, fn):
+        return [fn(c) for c in self.children]
+
+    mC = map_children
+
+    def has_child(self, name):
+        return any(c.name == name for c in self.children)
+
+    hC = has_child
+
+    def add_child(self, child):
+        if "children" not in self._obj:
+            self._obj["children"] = []
+        self._obj["children"].append(child.raw if isinstance(child, KvoNode) else child)
+
+    def remove_child(self, id):
+        self._obj["children"] = [c for c in self._obj.get("children", []) if c.get("id") != id]
+
+    # ---------- Navigation ---------- #
+
+    def navigate(self, path):
+        if not path:
+            return self
+
+        parts = path.split(".")
+        current = self
+
+        for i, part in enumerate(parts):
+            # last part → property check
+            if i == len(parts) - 1 and current.prop(part) is not None:
+                return current.prop(part)
+
+            nxt = current.find(part)
+            if not nxt:
+                return None
+            current = nxt
+
+        return current
+
+    n = navigate
+    nav = navigate
+
+
+####################################
+# Normal Code
 
 RUNTIME_PATH = os.path.expanduser("~/.config/aureli")
 CONFIG_PATH = os.path.expanduser(RUNTIME_PATH + "/config.json")
+PLUGIN_API_VERSION = "Elephant-1"
 global location
 global aureli_location
 aureli_location = os.path.expanduser("~/.local/share/equora")
@@ -178,6 +677,12 @@ def install_aureli():
             os.system("git clone https://github.com/eq-desktop/wallpapers ~/eqSh/wallpapers")
             print("Wallpapers installed")
         shutil.move(os.path.expanduser("~/eqSh"), os.path.expanduser(aureli_location))
+        # mkdir .config/aureli/
+        # mkdir .config/aureli/plugins
+        os.mkdir(os.path.expanduser("~/.config/aureli"))
+        os.mkdir(os.path.expanduser("~/.config/aureli/plugins"))
+        # install plugins
+        install_plugin("https://github.com/eq-desktop/Aureli-Base-Plugin")
         ok("Aureli installed")
         print("Post-installation steps:")
         print("- Install Quickshell https://quickshell.org")
@@ -223,6 +728,318 @@ def kill_aureli():
 
     os.kill(int(proc_id), 9)
 
+def get_plugins():
+    plugins = []
+    dirs = os.listdir(os.path.expanduser(RUNTIME_PATH + "/plugins"))
+    for directory in dirs:
+        # Read plugin.kvo file inside plugins
+        content = ""
+        with open(os.path.expanduser(RUNTIME_PATH + "/plugins/" + directory + "/plugin.kvo"), "r") as f:
+            content = f.read()
+        kavo = KvoNode(parse(content))
+        kavo.add_property("directory", directory)
+        files_of_dir = os.listdir(os.path.expanduser(RUNTIME_PATH + "/plugins/" + directory))
+        files = {}
+        for file in files_of_dir:
+            if file.endswith(".kvo"):
+                with open(os.path.expanduser(RUNTIME_PATH + "/plugins/" + directory + "/" + file), "r") as f:
+                    files[file] = f.read()
+        imports = kavo.nav("plugin").filter_kind("import")
+        for import_ in imports:
+            import_path = import_.value
+            if import_path.startswith("/"): pass
+            elif import_path.startswith("./"):
+                import_path = import_path[2:]
+            else: pass
+            import_nav_path = import_.path_parent()
+            import_file = files[import_path]
+            import_kvo = KvoNode(parse(import_file))
+            for child in import_kvo.children:
+                kavo.nav(import_nav_path).add_child(child)
+            kavo.nav(import_nav_path).remove_child(import_.id)
+        plugins.append(kavo)
+    return plugins
+
+def get_plugin(id: str):
+    plugins = get_plugins()
+    for plugin in plugins:
+        props = plugin.nav("plugin").properties
+        key = next(iter(props))
+        if key == id:
+            return plugin
+
+def prompt_default(text: str, default: str) -> str:
+    """
+    Prompt the user with a default value.
+    If user presses Enter, default is returned.
+    """
+    response = input(f"{text} [{default}]: ").strip()
+    return response or default    
+
+def install_plugin(url: str):
+    # --- Validate URL ---
+    if not (url.startswith("https://") or url.startswith("http://") or url.startswith("git@")):
+        raise ValueError("Only git/http(s) URLs are allowed")
+
+    plugins_dir = Path(RUNTIME_PATH) / "plugins"
+    plugins_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- Clone to temp dir ---
+    with tempfile.TemporaryDirectory(prefix="aureli-plugin-") as tmp:
+        tmp_path = Path(tmp)
+
+        result = subprocess.run(
+            [
+                "git", "clone",
+                "--depth", "1",
+                "--filter=blob:none",
+                url,
+                str(tmp_path)
+            ],
+            capture_output=True,
+            text=True,
+            timeout=25
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(f"Git clone failed:\n{result.stderr}")
+
+        # --- Read metadata ---
+        kvo_file = tmp_path / "plugin.kvo"
+        if not kvo_file.exists():
+            raise FileNotFoundError("plugin.kvo not found in repository")
+
+        content = kvo_file.read_text()
+        kavo = KvoNode(parse(content))
+
+        plugin_id = next(iter(kavo.nav("plugin").properties), None)
+        if not plugin_id:
+            raise ValueError("Plugin ID missing in plugin.kvo")
+
+        # --- Check if already installed ---
+        if get_plugin(plugin_id):
+            raise FileExistsError(f"Plugin '{plugin_id}' is already installed")
+
+        # --- Final destination uses ID, not repo name ---
+        target_dir = plugins_dir / plugin_id
+
+        shutil.move(str(tmp_path), target_dir)
+
+    ok(f"Plugin '{plugin_id}' installed")
+
+def new_plugin():
+    print("Creating new Aureli plugin...")
+
+    while True:
+        dir_name = input("Enter the plugin folder name (or '.' for current folder): ").strip()
+        if not dir_name:
+            print("Folder name cannot be empty")
+            continue
+
+        if dir_name == ".":
+            target_path = Path.cwd()
+        else:
+            target_path = Path.cwd() / dir_name
+            if target_path.exists():
+                print(f"Folder '{dir_name}' already exists. Pick another name.")
+                continue
+            target_path.mkdir(parents=True)
+
+        print(f"Plugin development folder ready at: {target_path}")
+        break
+
+    print("\nEnter plugin metadata:")
+    plugin_name = prompt_default("Plugin Name", "MyPlugin")
+    plugin_id = prompt_default("Plugin Id", plugin_name.lower().replace(" ", "-"))
+    plugin_author = prompt_default("Author", "Anonymous")
+    plugin_version = prompt_default("Version", "0.1.0")
+    plugin_api = prompt_default("API Version", PLUGIN_API_VERSION)
+    plugin_description = prompt_default("Description", "A new Aureli plugin")
+
+    kvo_content = f"""plugin "{plugin_id}" {{
+  meta {{
+    name: "{plugin_name}"
+    author: "{plugin_author}"
+    version: "{plugin_version}"
+    api: "{plugin_api}"
+    description: "{plugin_description}"
+  }}
+}}
+"""
+
+    kvo_path = target_path / "plugin.kvo"
+    kvo_path.write_text(kvo_content, encoding="utf-8")
+    ok(f"plugin.kvo created at {kvo_path}")
+
+
+def load_plugin(source_folder: str):
+    source_path = Path(source_folder).expanduser().resolve()
+    if not source_path.exists() or not source_path.is_dir():
+        raise FileNotFoundError(f"Source folder '{source_folder}' does not exist or is not a directory")
+
+    kvo_file = source_path / "plugin.kvo"
+    if not kvo_file.exists():
+        raise FileNotFoundError(f"No 'plugin.kvo' found in {source_path}")
+
+    # Read metadata
+    content = kvo_file.read_text(encoding="utf-8")
+    kavo = KvoNode(parse(content))
+    meta = kavo.nav("plugin.meta")
+    plugin_id = meta.prop("directory")
+    if not plugin_id:
+        raise ValueError("plugin.kvo is missing the 'directory' field in meta")
+
+    # Destination path
+    plugins_dir = Path(RUNTIME_PATH) / "plugins"
+    plugins_dir.mkdir(parents=True, exist_ok=True)
+    target_path = plugins_dir / plugin_id
+
+    if target_path.exists():
+        raise FileExistsError(f"Plugin '{plugin_id}' is already installed")
+
+    # Copy folder
+    shutil.copytree(source_path, target_path)
+    ok(f"Plugin '{meta.nav('name').value}' loaded into plugins folder as '{plugin_id}'")
+
+def meta_plugin(url: str):
+    if not (url.startswith("https://") or url.startswith("http://") or url.startswith("git@")):
+        raise ValueError("Only git/http(s) URLs are allowed")
+
+    with tempfile.TemporaryDirectory(prefix="aureliplugin-") as tmp:
+        tmp_path = Path(tmp)
+
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1", "--filter=blob:none", url, str(tmp_path)],
+            capture_output=True,
+            text=True,
+            timeout=20
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Git clone failed:\n{result.stderr}")
+
+        kvo_file = tmp_path / "plugin.kvo"
+        if not kvo_file.exists():
+            raise FileNotFoundError("plugin.kvo not found in repository")
+
+        content = kvo_file.read_text(encoding="utf-8")
+        kavo = KvoNode(parse(content))
+
+        plugin_node = kavo.nav("plugin")
+        plugin_id = next(iter(plugin_node.properties), None)
+
+        meta = plugin_node.nav("meta")
+
+        installed = get_plugin(plugin_id) is not None
+
+        print(f"\nInformation for '{meta.nav('name').value}' Plugin")
+        print("─" * 40)
+        print(f"Name:        {meta.nav('name').value}")
+        print(f"ID:          {plugin_id}")
+        print(f"Version:     {meta.nav('version').value}")
+        print(f"API:         {meta.nav('api').value}")
+        print(f"Author:      {meta.nav('author').value}")
+        print(f"Description: {meta.nav('description').value}")
+        print(f"Installed:   {'Yes' if installed else 'No'}")
+
+def uninstall_plugin(id: str):
+    plugin = get_plugin(id)
+    if plugin is None:
+        raise FileNotFoundError(f"Plugin '{id}' is not installed")
+
+    plugin_dir_name = plugin.prop("directory")
+    if not plugin_dir_name:
+        raise FileNotFoundError(f"Plugin '{id}' does not have a directory assigned")
+
+    plugin_dir = Path(RUNTIME_PATH) / "plugins" / plugin_dir_name
+
+    if not plugin_dir.exists():
+        raise FileNotFoundError(f"Plugin '{id}' directory '{plugin_dir}' not found")
+
+    try:
+        shutil.rmtree(plugin_dir)
+    except Exception as e:
+        raise RuntimeError(f"Failed to remove plugin '{id}': {e}")
+
+    ok(f"Plugin '{id}' uninstalled successfully")
+
+def update_plugin(id: str):
+    plugin = get_plugin(id)
+    if plugin is None:
+        raise FileNotFoundError(f"Plugin '{id}' is not installed")
+
+    plugin_dir_name = plugin.prop("directory")
+    if not plugin_dir_name:
+        raise FileNotFoundError(f"Plugin '{id}' does not have a directory assigned")
+
+    plugin_dir = Path(RUNTIME_PATH) / "plugins" / plugin_dir_name
+
+    if not plugin_dir.exists():
+        raise FileNotFoundError(f"Plugin '{id}' directory '{plugin_dir}' not found")
+
+    if not (plugin_dir / ".git").exists():
+        raise RuntimeError(f"Plugin '{id}' is not a git repository, cannot update")
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(plugin_dir), "pull", "--ff-only"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Update failed:\n{result.stderr.strip()}")
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Update timed out for plugin '{id}'")
+
+    ok(f"Plugin '{id}' updated successfully")
+
+def list_plugins():
+    plugins = get_plugins()
+
+    for plugin in plugins:
+        try:
+            props = plugin.nav("plugin").properties or {}
+            key = next(iter(props), "unknown")
+
+            name = plugin.nav("plugin.meta.name").value
+            author = plugin.nav("plugin.meta.author").value
+
+            print(" · " + "\033[90m" + f"{name} — {author}" + "\033[0m")
+            print(" ├ Id: " + "\033[94m" + key + "\033[0m")
+            print(" └ Enabled: " + "\033[92menabled\033[0m")
+        except Exception as e:
+            print(" · \033[91mBroken plugin\033[0m:", e)
+
+def versions():
+    print("\033[96mInfo\033[0m\n")
+
+    # --- Kavo ---
+    print("\033[94mKavo Format\033[0m")
+    print(f"  Version : \033[96m{PLUGIN_API_VERSION}\033[0m")
+    print()
+
+    # --- CLI ---
+    print("\033[94mAureli\033[0m")
+    print(f"  CLI Version   : \033[96m0.1.0\033[0m")
+    print(f"  Install Path  : \033[96m{os.path.expanduser(aureli_location)}\033[0m")
+    print(f"  Runtime Path  : \033[96m{os.path.expanduser(RUNTIME_PATH)}\033[0m")
+    print()
+
+    # --- Python ---
+    print("\033[94mRuntime\033[0m")
+    print(f"  Python        : \033[96m{sys.version.split()[0]}\033[0m")
+    print()
+
+def compile_plugin(id: str, compact: bool):
+    plugins = get_plugins()
+    # get plugin
+    for plugin in plugins:
+        props = plugin.nav("plugin").properties
+        key = next(iter(props))
+        if key == id:
+            print(json.dumps(plugin.raw, indent=None if compact else 4))
+            return
+
 def run_detached(cmd: str):
     """Run a command detached from this process."""
     subprocess.Popen(
@@ -244,6 +1061,17 @@ def exit_because(msg: str, code: int=0):
     print(msg)
     sys.exit(code)
 
+command_map = {
+    "v": "version",
+    "q": "quit",
+    "rs": "restart",
+    "p": "plugin",
+    "i": "ipc",
+    "s": "set",
+    "g": "get",
+    "r": "run",
+}
+
 def main():
     global location
     global aureli_location
@@ -252,11 +1080,38 @@ def main():
     parser.add_argument("-l", "--location", default=location, help="Location of Aureli")
     parser.add_argument("-L", "--location-aureli", default=aureli_location, help="Location to install Aureli to")
 
-    run_cmd = sub.add_parser("run", help="Run Aureli")
+    run_cmd = sub.add_parser("run", aliases=["r"], help="Run Aureli")
     run_cmd.add_argument("--dev", action="store_true", help="Run Aureli in development mode")
+
+    plugin = sub.add_parser("plugin", aliases=["p"], help="Manage plugins")
+    plugin_sub = plugin.add_subparsers(dest="plugin_command", required=True)
+
+    plugin_install = plugin_sub.add_parser("install", aliases=["i"], help="Install a plugin")
+    plugin_install.add_argument("url", help="The URL of the plugin")
+
+    plugin_uninstall = plugin_sub.add_parser("uninstall", aliases=["rm"], help="Uninstall a plugin")
+    plugin_uninstall.add_argument("id", help="The name of the plugin")
+
+    plugin_list = plugin_sub.add_parser("list", aliases=["l"], help="List installed plugins")
+
+    plugin_meta = plugin_sub.add_parser("meta", aliases=["m"], help="Get plugin meta")
+    plugin_meta.add_argument("url", help="The URL of the plugin")
+
+    plugin_update = plugin_sub.add_parser("update", aliases=["u"], help="Update a plugin")
+    plugin_update.add_argument("id", help="The name of the plugin")
+
+    plugin_new = plugin_sub.add_parser("new", aliases=["n"], help="Create a new plugin")
+
+    plugin_load = plugin_sub.add_parser("load", help="Load a plugin from a directory")
+    plugin_load.add_argument("dir", help="The directory of the plugin")
+
+    plugin_compile = plugin_sub.add_parser("compile", aliases=["c"], help="Compile a plugin")
+    plugin_compile.add_argument("id", help="The name of the plugin")
+    plugin_compile.add_argument("--compact", action="store_true", help="Don't Indent the plugin")
 
     sub.add_parser("lock", help="Lock the screen")
     sub.add_parser("update", help="Look for updates")
+    sub.add_parser("version", aliases=["v"], help="Show Aureli version")
     sub.add_parser("install", help="Install Aureli")
     sub.add_parser("installWallpapers", help="Install Aureli's default wallpapers")
     sub.add_parser("settings", help="Open settings")
@@ -276,16 +1131,16 @@ def main():
     dialog.add_argument("commandAccept", help="The command to run when the accept button is clicked")
     dialog.add_argument("commandDecline", help="The command to run when the decline button is clicked")
     dialog.add_argument("customStyle", help="The custom style of the dialog")
-    sub.add_parser("quit", help="Quit Aureli")
-    sub.add_parser("restart", help="Restart Aureli")
-    set_cmd = sub.add_parser("set", help="Set a setting")
+    sub.add_parser("quit", aliases=["q"], help="Quit Aureli")
+    sub.add_parser("restart", aliases=["rs"], help="Restart Aureli")
+    set_cmd = sub.add_parser("set", aliases=["s"], help="Set a setting")
     set_cmd.add_argument("setting", help="The setting to set (e.g. bar.height)")
     set_cmd.add_argument("value", help="The value to set the setting to")
 
-    get_cmd = sub.add_parser("get", help="Get a setting")
+    get_cmd = sub.add_parser("get", aliases=["g"], help="Get a setting")
     get_cmd.add_argument("setting", help="The setting to get (e.g. bar.height)")
 
-    ipc_cmd = sub.add_parser("ipc", help="Call an IPC method")
+    ipc_cmd = sub.add_parser("ipc", aliases=["i"], help="Call an IPC method")
     ipc_cmd.add_argument("method", help="The method to call")
     ipc_cmd.add_argument("args", nargs=argparse.REMAINDER, help="The arguments to pass to the method")
 
@@ -300,7 +1155,29 @@ def main():
     location = args.location
     aureli_location = args.location_aureli
 
-    if args.command == "run":
+    if args.command in command_map:
+        args.command = command_map[args.command]
+
+    if args.command == "plugin":
+        if args.plugin_command == "install":
+            install_plugin(args.url)
+        elif args.plugin_command == "uninstall":
+            uninstall_plugin(args.id)
+        elif args.plugin_command == "update":
+            update_plugin(args.id)
+        elif args.plugin_command == "new":
+            new_plugin()
+        elif args.plugin_command == "load":
+            load_plugin(args.dir)
+        elif args.plugin_command == "meta":
+            meta_plugin(args.url)
+        elif args.plugin_command == "list":
+            list_plugins()
+        elif args.plugin_command == "compile":
+            compile_plugin(args.id, args.compact)
+    elif args.command == "version":
+        versions()
+    elif args.command == "run":
         if is_aureli_running(): exit_because("Aureli is already running", 0)
         if args.dev:
             eqsh_run_dev("")
