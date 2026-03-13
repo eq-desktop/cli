@@ -885,9 +885,9 @@ def load_plugin(source_folder: str):
     content = kvo_file.read_text(encoding="utf-8")
     kavo = KvoNode(parse(content))
     meta = kavo.nav("plugin.meta")
-    plugin_id = meta.prop("directory")
+    plugin_id = next(iter(kavo.nav("plugin").properties), None)
     if not plugin_id:
-        raise ValueError("plugin.kvo is missing the 'directory' field in meta")
+        raise ValueError("plugin.kvo is missing the 'id' field")
 
     # Destination path
     plugins_dir = Path(RUNTIME_PATH) / "plugins"
