@@ -1184,7 +1184,7 @@ def main():
         else:
             eqsh_run("")
     elif args.command == "lock":
-        ipc("eqlock", "lock")
+        ipc("lock", "lock")
     elif args.command == "install":
         install_aureli()
     elif args.command == "installWallpapers":
