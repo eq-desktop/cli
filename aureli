@@ -1117,6 +1117,7 @@ def update():
     # check for sudo
     if os.getuid() != 0:
         print("\033[91mError: This command must be run as root.\033[0m")
+        return
     url = "https://raw.githubusercontent.com/eq-desktop/cli/refs/heads/main/aureli"
     response = requests.get(url)
 
