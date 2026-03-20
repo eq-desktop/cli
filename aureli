@@ -1122,7 +1122,8 @@ def update():
 
     if response.status_code == 200:
         file_path = Path(__file__)
-        file_path.write_text(response.text)
+        with open(file_path, "w") as f:
+            f.write(response.text)
         print("\033[92mUpdated successfully.\033[0m")
     else:
         print("\033[91mUpdate failed.\033[0m")
