@@ -11,6 +11,7 @@ import shutil
 import re
 import subprocess
 import tempfile
+import requests
 from pathlib import Path
 from urllib.parse import urlparse
 UUID = 0
@@ -626,6 +627,20 @@ def ipc(*cmd: str):
     cmd_list = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
     eqsh_run("ipc " + "call " + " ".join(cmd_list))
 
+def ipc_call(*cmd: str):
+    if not is_aureli_running():
+        exit_because("Aureli is not running")
+
+    cmd_list = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
+    full_cmd = eqsh("ipc call " + " ".join(cmd_list))
+
+    output = run_capture(full_cmd)
+
+    try:
+        return json.loads(output)
+    except:
+        return output
+
 def ipc_raw(*cmd: str):
     if not is_aureli_running(): exit_because("Aureli is not running")
     cmd_list = [f"\"{x}\"" if isinstance(x, str) else str(x) for x in cmd]
@@ -1050,12 +1065,84 @@ def run_detached(cmd: str):
         start_new_session=True,
     )
 
+def run_capture(cmd: str, cwd: str | None = None) -> str:
+    result = subprocess.run(
+        cmd,
+        shell=True,
+        cwd=cwd,
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip())
+
+    return result.stdout.strip()
+
+def collect_funcs() -> dict[str, dict]:
+    """Collect all available message functions."""
+    res = run_capture("qs -p " + location + " ipc show").splitlines()
+    categories = {}
+    for line in res:
+        if line.startswith("  "):
+            # This is a method
+            method = line.strip()
+            # remove function prefix
+            method = method[9:]
+            # get name before (
+            method_name = method.split("(")[0].strip()
+            # get arguments name: type, ...
+            method_args = [x.strip() for x in method.split("(")[1].split(")")[0].split(",")]
+            # get return type
+            method_return = method.split(")")[1].strip().split(":")[-1].strip()
+            categories[category].append({
+                "name": method_name,
+                "args": method_args,
+                "return": method_return
+            })
+        elif line.startswith("target"):
+            # This is a category
+            category = line[6:].strip()
+            categories[category] = []
+    return categories
+
 def run(cmd: str, cwd: str|None=None):
     subprocess.run(
         args=cmd,
         shell=True,
         cwd=cwd
     )
+
+def update():
+    url = "https://raw.githubusercontent.com/eq-desktop/cli/refs/heads/main/aureli"
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        file_path = Path(__file__)
+        file_path.write_text(response.text)
+        print("Updated successfully.", __file__)
+    else:
+        print("Update failed.")
+
+def msg_help(cmd: str|None=None):
+    print("Communicate with Aureli.\n")
+    if cmd:
+        print(f"\033[1m\033[4mUsage:\033[0m\033[0m msg {cmd} <Msg> <Args>\n")
+        print("\033[1m\033[4mCommands:\033[0m\033[0m")
+        for category, methods in collect_funcs().items():
+            if category.lower() == cmd.lower():
+                for method in methods:
+                    print(f"  \033[1m{method['name']}\033[0m({', '.join(method['args'])}) -> {method['return']}")
+    else:
+        print(f"\033[1m\033[4mUsage:\033[0m\033[0m msg [Command] <Msg> <Args>\n")
+        print("\033[1m\033[4mCommands:\033[0m\033[0m")
+        for category, methods in collect_funcs().items():
+            print(f"  \033[1m{category}\033[0m{(20 - len(category)) * ' '}{", ".join([x['name'] for x in methods])}")
+
+def msg_table():
+    for category, methods in collect_funcs().items():
+        for method in methods:
+            print(f"\033[1m{category} | {method['name']}({', '.join([x.split(": ")[0] for x in method['args']])})\033[0m")
 
 def exit_because(msg: str, code: int=0):
     print(msg)
@@ -1067,6 +1154,7 @@ command_map = {
     "rs": "restart",
     "p": "plugin",
     "i": "ipc",
+    "m": "msg",
     "s": "set",
     "g": "get",
     "r": "run",
@@ -1110,17 +1198,18 @@ def main():
     plugin_compile.add_argument("--compact", action="store_true", help="Don't Indent the plugin")
 
     sub.add_parser("lock", help="Lock the screen")
-    sub.add_parser("update", help="Look for updates")
+    update_cmd = sub.add_parser("update", help="Look for updates")
+    update_cmd.add_argument("target", choices=["cli", "aureli"], help="Which one to update [cli, aureli]")
     sub.add_parser("version", aliases=["v"], help="Show Aureli version")
     sub.add_parser("install", help="Install Aureli")
-    sub.add_parser("installWallpapers", help="Install Aureli's default wallpapers")
+    sub.add_parser("install-wallpapers", help="Install Aureli's default wallpapers")
     sub.add_parser("settings", help="Open settings")
     sub.add_parser("launchpad", help="Open launchpad")
-    notch = sub.add_parser("new_notch_app", help="Create a new notch app")
-    sub.add_parser("destroy_notch_app", help="Forcefully quits any running notch app")
+    notch = sub.add_parser("new-notch-app", help="Create a new notch app")
+    sub.add_parser("destroy-notch-app", help="Forcefully quits any running notch app")
     notch.add_argument("file", help="The QML file to open")
     notch.add_argument("title", help="The title of the app")
-    sub.add_parser("notification_center", help="Open notification center")
+    sub.add_parser("notification-center", help="Open notification center")
     dialog = sub.add_parser("dialog", help="Open a dialog")
     dialog.add_argument("appName", help="The name of the app")
     dialog.add_argument("iconPath", help="The path to the icon")
@@ -1128,9 +1217,9 @@ def main():
     dialog.add_argument("description", help="The description of the dialog")
     dialog.add_argument("accept", help="The text of the accept button")
     dialog.add_argument("decline", help="The text of the decline button")
-    dialog.add_argument("commandAccept", help="The command to run when the accept button is clicked")
-    dialog.add_argument("commandDecline", help="The command to run when the decline button is clicked")
-    dialog.add_argument("customStyle", help="The custom style of the dialog")
+    dialog.add_argument("command-accept", help="The command to run when the accept button is clicked")
+    dialog.add_argument("command-decline", help="The command to run when the decline button is clicked")
+    dialog.add_argument("custom-style", help="The custom style of the dialog")
     sub.add_parser("quit", aliases=["q"], help="Quit Aureli")
     sub.add_parser("restart", aliases=["rs"], help="Restart Aureli")
     set_cmd = sub.add_parser("set", aliases=["s"], help="Set a setting")
@@ -1143,6 +1232,10 @@ def main():
     ipc_cmd = sub.add_parser("ipc", aliases=["i"], help="Call an IPC method")
     ipc_cmd.add_argument("method", help="The method to call")
     ipc_cmd.add_argument("args", nargs=argparse.REMAINDER, help="The arguments to pass to the method")
+
+    msg_cmd = sub.add_parser("msg", aliases=["m"], help="Communicate with Aureli")
+    msg_cmd.add_argument("method", nargs=argparse.REMAINDER, default=None, help="The method to send")
+    sub.add_parser("msg-table", help="Table of msg commands")
 
     sub.add_parser("funcs", help="Show all available IPC methods")
 
@@ -1187,31 +1280,45 @@ def main():
         ipc("lock", "lock")
     elif args.command == "install":
         install_aureli()
-    elif args.command == "installWallpapers":
+    elif args.command == "install-wallpapers":
         install_wallpapers()
     elif args.command == "settings":
         ipc("settings", "toggle")
     elif args.command == "update":
-        run("git pull ", cwd=os.path.expanduser(aureli_location))
+        if args.target == "cli":
+            update()
+        elif args.target == "aureli":
+            run("git pull ", cwd=os.path.expanduser(aureli_location))
     elif args.command == "launchpad":
         ipc("launchpad", "toggle")
     elif args.command == "ipc":
-        ipc(args.method, *args.args)
+        answ = ipc_call(args.method, *args.args)
+        if answ != "": print("Returned:", answ)
+    elif args.command == "msg":
+        if args.method == []:
+            msg_help()
+        elif len(args.method) == 1:
+            msg_help(args.method[0])
+        else:
+            print(args.method[0], *args.method[1:])
+            ipc(args.method[0], *args.method[1:])
+    elif args.command == "msg-table":
+        msg_table()
     elif args.command == "funcs":
         ipc_raw("show")
-    elif args.command == "new_notch_app":
+    elif args.command == "new-notch-app":
         # code: string, timeout: int, start_delay: int
         file_contents = ""
         with open(args.file, "r") as f:
             file_contents = f.read()
         safe_contents = file_contents.replace("\\", "\\\\").replace('"', '\\"')
         ipc("notch", "instance", safe_contents)
-    elif args.command == "destroy_notch_app":
+    elif args.command == "destroy-notch-app":
         ipc("notch", "closeInstance")
     elif args.command == "dialog":
         # appName: string, icon_path: string, title: string, description: string, accept: string, decline: string, commandAccept: string, commandDecline: string, customStyle: string
-        ipc("systemDialogs", "newDialog", args.appName, args.iconPath, args.title, args.description, args.accept, args.decline, args.commandAccept, args.commandDecline, args.customStyle)
-    elif args.command == "notification_center":
+        ipc("systemDialogs", "newDialog", args.appName, args.iconPath, args.title, args.description, args.accept, args.decline, args.command_accept, args.command_decline, args.custom_style)
+    elif args.command == "notification-center":
         ipc("notificationCenter", "toggle")
     elif args.command == "quit":
         kill_aureli()
