@@ -1114,15 +1114,18 @@ def run(cmd: str, cwd: str|None=None):
     )
 
 def update():
+    # check for sudo
+    if os.getuid() != 0:
+        print("\033[91mError: This command must be run as root.\033[0m")
     url = "https://raw.githubusercontent.com/eq-desktop/cli/refs/heads/main/aureli"
     response = requests.get(url)
 
     if response.status_code == 200:
         file_path = Path(__file__)
         file_path.write_text(response.text)
-        print("Updated successfully.")
+        print("\033[92mUpdated successfully.\033[0m")
     else:
-        print("Update failed.")
+        print("\033[91mUpdate failed.\033[0m")
 
 def msg_help(cmd: str|None=None):
     print("Communicate with Aureli.\n")
