@@ -514,6 +514,10 @@ global aureli_location
 aureli_location = os.path.expanduser("~/.local/share/equora")
 location = os.path.expanduser(aureli_location + "/eqsh")
 
+BOLD = "\033[1m"
+RESET = "\033[0m"
+UNDERLINE = "\033[4m"
+
 if os.environ.get("QT_LOGGING_RULES", False):
     os.environ["QT_LOGGING_RULES"] += ";qml.debug=true"
 else:
@@ -1113,6 +1117,12 @@ def run(cmd: str, cwd: str|None=None):
         cwd=cwd
     )
 
+def log():
+    print("\033[92mVersion: \033[0m")
+    run("qs --version")
+    print("\033[91mLog:\033[0m")
+    run(eqsh("log"))
+
 def update():
     # check for sudo
     if os.getuid() != 0:
@@ -1130,19 +1140,19 @@ def update():
         print("\033[91mUpdate failed.\033[0m")
 
 def msg_help(cmd: str|None=None):
-    print("Communicate with Aureli.\n")
+    print(f"{BOLD}Communicate with Aureli.{RESET}\n")
     if cmd:
-        print(f"\033[1m\033[4mUsage:\033[0m\033[0m msg {cmd} <Msg> <Args>\n")
-        print("\033[1m\033[4mCommands:\033[0m\033[0m")
+        print(f"{BOLD}{UNDERLINE}Usage:{RESET} msg {cmd} <method> [args...]\n")
+        print(f"{BOLD}{UNDERLINE}Commands:{RESET}")
         for category, methods in collect_funcs().items():
             if category.lower() == cmd.lower():
                 for method in methods:
-                    print(f"  \033[1m{method['name']}\033[0m({', '.join(method['args'])}) -> {method['return']}")
+                    print(f"  {BOLD}{method['name']}{RESET}({', '.join(method['args'])}) -> {method['return']}")
     else:
-        print(f"\033[1m\033[4mUsage:\033[0m\033[0m msg [Command] <Msg> <Args>\n")
-        print("\033[1m\033[4mCommands:\033[0m\033[0m")
+        print(f"{BOLD}{UNDERLINE}Usage:{RESET} msg <target> <method> [args...]\n")
+        print(f"{BOLD}{UNDERLINE}Commands:{RESET}")
         for category, methods in collect_funcs().items():
-            print(f"  \033[1m{category}\033[0m{(20 - len(category)) * ' '}{", ".join([x['name'] for x in methods])}")
+            print(f"  {BOLD}{category}{RESET}{(20 - len(category)) * ' '}{", ".join([x['name'] for x in methods])}")
 
 def msg_table():
     for category, methods in collect_funcs().items():
@@ -1156,7 +1166,6 @@ def exit_because(msg: str, code: int=0):
 command_map = {
     "v": "version",
     "q": "quit",
-    "rs": "restart",
     "p": "plugin",
     "i": "ipc",
     "m": "msg",
@@ -1165,10 +1174,108 @@ command_map = {
     "r": "run",
 }
 
+class CustomHelpFormatter(argparse.HelpFormatter):
+    def start_section(self, heading):
+        # Bold section headers
+        if heading.lower().startswith("positional"):
+            heading = "Commands"
+        heading = f"{BOLD}{UNDERLINE}{heading.capitalize()}{RESET}"
+        super().start_section(heading)
+
+    def add_usage(self, usage, actions, groups, prefix=None):
+        # Custom "Usage" header
+        if prefix is None:
+            prefix = f"{BOLD}{UNDERLINE}Usage:{RESET} "
+        return super().add_usage(usage, actions, groups, prefix)
+
+    def add_arguments(self, actions):
+        seen = set()
+        lines = []
+
+        max_len = 0
+
+        # build unique action list
+        for action in actions:
+            name = self._format_action_invocation(action)
+
+            # skip duplicates
+            key = tuple(action.option_strings)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            max_len = max(max_len, len(name))
+
+        for action in actions:
+            key = tuple(action.option_strings)
+            if key not in seen:
+                continue
+            seen.remove(key)
+
+            name = self._format_action_invocation(action)
+            help_text = action.help or ""
+
+            padding = " " * (max_len - len(name) + 2)
+            lines = f"  {name}{padding}{help_text}\n"
+
+            self._add_item(lambda l=lines: l, [])
+    
+    def _format_action(self, action):
+        # skip duplicate help entries or empty ones
+        if not action.option_strings and not action.metavar:
+            return ""
+
+        action_header = self._format_action_invocation(action)
+        help_text = action.help or ""
+
+        pad = 30
+        spacing = " " * max(2, pad - len(action_header))
+
+        return f"  {action_header}{spacing}{help_text}\n"
+
+    def _format_actions_usage(self, actions, groups):
+        for a in actions:
+            if isinstance(a, argparse._SubParsersAction):
+                return "<command>"
+
+        return super()._format_actions_usage(actions, groups)
+
+    def _format_action_invocation(self, action):
+        if isinstance(action, argparse._SubParsersAction):
+            # collect subcommands properly
+            entries = []
+
+            for choice_action in action._choices_actions:
+                name = choice_action.dest
+                help_text = choice_action.help or ""
+                
+                # skip short aliases like "r", "p", etc.
+                if len(name) == 1:
+                    continue
+
+                entries.append((name, help_text))
+
+            # alignment
+            max_len = max(len(name) for name, _ in entries)
+
+            result = [
+                f"{BOLD}{name}{RESET}{' ' * (max_len - len(name) + 2)}{help_text}"
+                for name, help_text in entries
+            ]
+
+            return "\n  ".join(result)
+
+        return super()._format_action_invocation(action)
+
+class AureliArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("formatter_class", CustomHelpFormatter)
+        super().__init__(*args, **kwargs)
+
 def main():
     global location
     global aureli_location
-    parser = argparse.ArgumentParser(prog="aureli", description="Aureli Command Line Interface")
+    parser = AureliArgumentParser(prog="aureli")
     sub = parser.add_subparsers(dest="command", required=True)
     parser.add_argument("-l", "--location", default=location, help="Location of Aureli")
     parser.add_argument("-L", "--location-aureli", default=aureli_location, help="Location to install Aureli to")
@@ -1198,6 +1305,8 @@ def main():
     plugin_load = plugin_sub.add_parser("load", help="Load a plugin from a directory")
     plugin_load.add_argument("dir", help="The directory of the plugin")
 
+    sub.add_parser("log", help="Shows the log of the current running instance")
+
     plugin_compile = plugin_sub.add_parser("compile", aliases=["c"], help="Compile a plugin")
     plugin_compile.add_argument("id", help="The name of the plugin")
     plugin_compile.add_argument("--compact", action="store_true", help="Don't Indent the plugin")
@@ -1226,7 +1335,7 @@ def main():
     dialog.add_argument("command-decline", help="The command to run when the decline button is clicked")
     dialog.add_argument("custom-style", help="The custom style of the dialog")
     sub.add_parser("quit", aliases=["q"], help="Quit Aureli")
-    sub.add_parser("restart", aliases=["rs"], help="Restart Aureli")
+    sub.add_parser("restart", help="Restart Aureli")
     set_cmd = sub.add_parser("set", aliases=["s"], help="Set a setting")
     set_cmd.add_argument("setting", help="The setting to set (e.g. bar.height)")
     set_cmd.add_argument("value", help="The value to set the setting to")
@@ -1289,6 +1398,8 @@ def main():
         install_wallpapers()
     elif args.command == "settings":
         ipc("settings", "toggle")
+    elif args.command == "log":
+        log()
     elif args.command == "update":
         if args.target == "cli":
             update()
