@@ -687,15 +687,15 @@ def install_aureli():
             else:
                 exit_because("Installation aborted")
         # install aureli
-        os.mkdir(os.path.expanduser("~/eqSh"))
+        os.mkdir(os.path.expanduser("~/eqsh"))
         # git clone
-        os.system("git clone https://github.com/eq-desktop/eqSh ~/eqSh")
+        os.system("git clone https://github.com/eq-desktop/eqsh ~/eqsh")
         os.system("git submodule update --init --recursive")
-        # mv ~/eqSh to ~/.local/share/equora
+        # mv ~/eqsh to ~/.local/share/equora
         if input("Do you want to also install wallpapers (Large files)? (y/n) ").lower() == "y":
-            os.system("git clone https://github.com/eq-desktop/wallpapers ~/eqSh/wallpapers")
+            os.system("git clone https://github.com/eq-desktop/wallpapers ~/eqsh/wallpapers")
             print("Wallpapers installed")
-        shutil.move(os.path.expanduser("~/eqSh"), os.path.expanduser(aureli_location))
+        shutil.move(os.path.expanduser("~/eqsh"), os.path.expanduser(aureli_location))
         # mkdir .config/aureli/
         # mkdir .config/aureli/plugins
         os.mkdir(os.path.expanduser("~/.config/aureli"))
