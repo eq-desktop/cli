@@ -1,0 +1,12 @@
+[project]
+name = "aureli"
+version = "0.1.0"
+authors = [
+  {name = "Eq Desktop"}
+]
+description = "Command-line interface for Aureli"
+dependencies = ["requests"]
+
+[project.scripts]
+aureli = "aureli.cli:main"
+au = "aureli.cli:main"

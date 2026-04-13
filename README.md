@@ -26,10 +26,8 @@ With Aureli CLI, you can:
 Make sure you have **Python 3** installed. Install it by cloning the repo:
 
 ```bash
-git clone https://github.com/eq-desktop/cli.git
-cd cli/
-./install.sh
-````
+pip install git+https://github.com/eq-desktop/cli.git
+```
 
 ---
 
